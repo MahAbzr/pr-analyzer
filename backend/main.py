@@ -22,7 +22,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-# Models
+# CHANGED: Added pr_metadata column
 class AnalysisResult(Base):
     __tablename__ = "analysis_results"
     id = Column(String, primary_key=True)
@@ -30,14 +30,14 @@ class AnalysisResult(Base):
     code_snippet = Column(String)
     extracted_data = Column(JSON)
     ml_result = Column(JSON)
+    pr_metadata = Column(JSON)  # NEW: Store PR metadata
     status = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
 Base.metadata.create_all(bind=engine)
 
-
-# Pydantic schemas
+# CHANGED: Added pr_metadata field
 class CodeInput(BaseModel):
     url: Optional[str] = None
     code: Optional[str] = None
@@ -48,6 +48,7 @@ class AnalysisResponse(BaseModel):
     status: str
     extracted_data: Optional[dict] = None
     ml_result: Optional[dict] = None
+    pr_metadata: Optional[dict] = None  # NEW: Include metadata in response
     message: str
 
 
@@ -165,8 +166,7 @@ class MLEngineService:
         }
         return result
 
-
-# Routes
+# CHANGED: Added PR metadata extraction
 @app.post("/api/analyze")
 async def analyze_code(input_data: CodeInput, background_tasks: BackgroundTasks):
     """Analyze code from URL or direct input"""
@@ -177,11 +177,71 @@ async def analyze_code(input_data: CodeInput, background_tasks: BackgroundTasks)
 
     try:
         code_content = ""
+        pr_metadata = {}
 
         # Extract code
         if input_data.url:
-            extracted = DataExtractionService.extract_from_url(input_data.url)
-            code_content = extracted["content"]
+            # Extract metadata and code from GitHub PR
+            code_files = []
+
+            if "github.com" in input_data.url and "/pull/" in input_data.url:
+                # This is a GitHub PR URL
+                try:
+                    # Parse PR URL
+                    parts = input_data.url.replace("https://github.com/", "").split("/")
+                    owner, repo, _, pr_num = parts[0], parts[1], parts[2], parts[3]
+
+                    # Get PR details from GitHub API
+                    pr_api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}"
+                    pr_response = httpx.get(pr_api_url, timeout=10)
+                    pr_response.raise_for_status()
+                    pr_data = pr_response.json()
+
+                    # Extract metadata
+                    pr_metadata = {
+                        "title": pr_data.get("title", ""),
+                        "body": pr_data.get("body", ""),
+                        "author": pr_data.get("user", {}).get("login", ""),
+                        "created_at": pr_data.get("created_at", ""),
+                        "updated_at": pr_data.get("updated_at", ""),
+                        "state": pr_data.get("state", ""),
+                        "additions": pr_data.get("additions", 0),
+                        "deletions": pr_data.get("deletions", 0),
+                        "changed_files": pr_data.get("changed_files", 0),
+                    }
+
+                    # Get PR files (changed code)
+                    files_api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/files"
+                    files_response = httpx.get(files_api_url, timeout=10)
+                    files_response.raise_for_status()
+                    files_data = files_response.json()
+
+                    # Extract code from each file
+                    for file_info in files_data:
+                        if file_info.get("status") != "removed":  # Skip deleted files
+                            file_name = file_info.get("filename", "")
+                            patch = file_info.get("patch", "")
+
+                            code_files.append({
+                                "filename": file_name,
+                                "status": file_info.get("status", ""),
+                                "additions": file_info.get("additions", 0),
+                                "deletions": file_info.get("deletions", 0),
+                                "changes": file_info.get("changes", 0),
+                                "patch": patch
+                            })
+
+                    # Combine all code from files
+                    combined_code = "\n".join([f"// File: {f['filename']}\n{f['patch']}" for f in code_files])
+                    code_content = combined_code if combined_code else pr_data.get("body", "")
+
+                except Exception as e:
+                    raise ValueError(f"Failed to extract PR metadata: {str(e)}")
+            else:
+                # For non-PR URLs, extract normally
+                extracted = DataExtractionService.extract_from_url(input_data.url)
+                code_content = extracted["content"]
+
         elif input_data.code:
             code_content = input_data.code
         else:
@@ -196,6 +256,7 @@ async def analyze_code(input_data: CodeInput, background_tasks: BackgroundTasks)
             url=input_data.url or "direct_input",
             code_snippet=code_content[:1000],
             extracted_data=extracted_features,
+            pr_metadata=pr_metadata if pr_metadata else None,  # Store metadata
             status="processing",
             ml_result=None
         )
@@ -209,6 +270,7 @@ async def analyze_code(input_data: CodeInput, background_tasks: BackgroundTasks)
             id=analysis_id,
             status="processing",
             extracted_data=extracted_features,
+            pr_metadata=pr_metadata if pr_metadata else None,  # Return metadata
             message="Analysis started. Check status for updates."
         )
 
@@ -218,9 +280,10 @@ async def analyze_code(input_data: CodeInput, background_tasks: BackgroundTasks)
         db.close()
 
 
+# CHANGED: Added pr_metadata to response
 @app.get("/api/analysis/{analysis_id}")
 async def get_analysis(analysis_id: str):
-    """Get analysis results"""
+    """Get analysis results including PR metadata"""
     db = SessionLocal()
     analysis = db.query(AnalysisResult).filter(AnalysisResult.id == analysis_id).first()
     db.close()
@@ -233,6 +296,7 @@ async def get_analysis(analysis_id: str):
         status=analysis.status,
         extracted_data=analysis.extracted_data,
         ml_result=analysis.ml_result,
+        pr_metadata=analysis.pr_metadata,  # Include metadata in response
         message="Analysis completed" if analysis.status == "completed" else "Processing..."
     )
 
