@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Search, Code, AlertCircle, CheckCircle, Clock, Zap } from 'lucide-react';
-import process from 'process';
 
 export default function CodeAnalyzer() {
   const [inputType, setInputType] = useState('url');
@@ -11,7 +10,7 @@ export default function CodeAnalyzer() {
   const [analysisId, setAnalysisId] = useState('');
   const [checkInterval, setCheckInterval] = useState(null);
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:8000/api';
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
