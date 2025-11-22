@@ -149,7 +149,7 @@ class MLEngineService:
         await asyncio.sleep(2)  # Simulate processing time
 
         result = {
-            "quality_score": 0.85,
+            "quality_score": 0.80,
             "maintainability": 0.78,
             "complexity_level": "medium",
             "issues": [
