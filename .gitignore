@@ -1,2 +1,5 @@
 .idea
 .env
+*.pem
+gha-ec2
+gha-ec2.pub
