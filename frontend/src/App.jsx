@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Download, Trash2, RefreshCw } from 'lucide-react';
-import process from 'process';
 
 export default function CodeAnalyzer() {
   const [codeInput, setCodeInput] = useState('');
@@ -10,7 +9,8 @@ export default function CodeAnalyzer() {
   const [error, setError] = useState('');
 
   // Get API URL from environment variables
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:8000/api';
+  // const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:8000/api';
+  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL);
 
   // Fetch all analyses on mount
   useEffect(() => {
