@@ -1,258 +1,231 @@
-import React, { useState } from 'react';
-import { Search, Code, AlertCircle, CheckCircle, Clock, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Send, Download, Trash2, RefreshCw } from 'lucide-react';
 
 export default function CodeAnalyzer() {
-  const [inputType, setInputType] = useState('url');
-  const [url, setUrl] = useState('');
-  const [code, setCode] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [analyses, setAnalyses] = useState([]);
+  const [selectedAnalysis, setSelectedAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState(null);
-  const [analysisId, setAnalysisId] = useState('');
-  const [checkInterval, setCheckInterval] = useState(null);
+  const [error, setError] = useState('');
 
+  // Get API URL from environment variables
   const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:8000/api';
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
 
+  // Fetch all analyses on mount
+  useEffect(() => {
+    fetchAnalyses();
+  }, []);
+
+  const fetchAnalyses = async () => {
     try {
-      const payload = inputType === 'url'
-        ? { url }
-        : { code };
-
-      const response = await fetch(`${API_URL}/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error('Analysis failed');
-
-      const data = await response.json();
-      setAnalysisId(data.id);
-      setResults({
-        id: data.id,
-        status: 'processing',
-        extracted_data: data.extracted_data,
-        ml_result: null,
-      });
-
-      // Poll for results
-      const interval = setInterval(() => pollResults(data.id), 2000);
-      setCheckInterval(interval);
+      const res = await fetch(`${API_URL}/analyses?limit=50`);
+      if (!res.ok) throw new Error('Failed to fetch analyses');
+      const data = await res.json();
+      setAnalyses(data);
     } catch (err) {
-      alert('Error: ' + err.message);
-      setLoading(false);
-    }
-  };
-
-  const pollResults = async (id) => {
-    try {
-      const response = await fetch(`${API_URL}/analysis/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch results');
-
-      const data = await response.json();
-      setResults(data);
-
-      if (data.status === 'completed' || data.status === 'failed') {
-        clearInterval(checkInterval);
-        setLoading(false);
-      }
-    } catch (err) {
+      setError('Failed to load analyses');
       console.error(err);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Code className="w-10 h-10 text-purple-400" />
-            <h1 className="text-4xl font-bold text-white">Code Analyzer</h1>
-          </div>
-          <p className="text-gray-300">Analyze code quality, complexity, and get AI-powered insights</p>
+  const handleAnalyze = async () => {
+    if (!codeInput.trim()) {
+      setError('Please enter code to analyze');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch(`${API_URL}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code_snippet: codeInput })
+      });
+
+      if (!res.ok) throw new Error('Analysis failed');
+
+      const result = await res.json();
+      setSelectedAnalysis(result);
+      setAnalyses([result, ...analyses]);
+      setCodeInput('');
+    } catch (err) {
+      setError('Failed to analyze code');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this analysis?')) return;
+
+    try {
+      const res = await fetch(`${API_URL}/analysis/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+
+      setAnalyses(analyses.filter(a => a.id !== id));
+      if (selectedAnalysis?.id === id) setSelectedAnalysis(null);
+    } catch (err) {
+      setError('Failed to delete analysis');
+    }
+  };
+
+  const downloadResult = (analysis) => {
+    const content = `Code Analysis Report
+====================
+Date: ${new Date(analysis.created_at).toLocaleString()}
+ID: ${analysis.id}
+
+ORIGINAL CODE:
+${analysis.original_code}
+
+FIXED CODE:
+${analysis.fixed_code}
+
+Risk SCORES:
+Before: ${analysis.before_score}/100
+After: ${analysis.after_score}/100
+Improvement: ${(analysis.before_score - analysis.after_score).toFixed(2)} points
+`;
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analysis_${analysis.id}.txt`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const ScoreDisplay = ({ before, after }) => {
+    const improvement = before.toFixed(1) - after.toFixed(1);
+    return (
+      <div className="flex gap-6">
+        <div className="text-center">
+          <div className="text-sm text-gray-600 mb-2">Before</div>
+          <div className="text-3xl font-bold text-red-500">{before.toFixed(1)}</div>
+          <div className="text-xs text-gray-500">Risk Score</div>
         </div>
+        <div className="flex items-center justify-center">
+          <div className="text-2xl text-gray-400">→</div>
+        </div>
+        <div className="text-center">
+          <div className="text-sm text-gray-600 mb-2">After</div>
+          <div className="text-3xl font-bold text-green-500">{after.toFixed(1)}</div>
+          <div className="text-xs text-gray-500">Risk Score</div>
+        </div>
+        <div className="flex items-center justify-center">
+          <div className={`text-lg font-bold ${improvement >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {improvement >= 0 ? '+' : ''} {improvement.toFixed(1)}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-4xl font-bold text-white mb-2">Code Security Analyzer</h1>
+        <p className="text-gray-400 mb-8">Analyze and secure your code with AI-powered insights</p>
+
+        <div className="grid grid-cols-3 gap-6">
           {/* Input Section */}
-          <div className="lg:col-span-1">
-            <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/20">
-              <h2 className="text-xl font-semibold text-white mb-6">Input Code</h2>
+          <div className="col-span-2 space-y-4">
+            <div className="bg-slate-700 rounded-lg p-6">
+              <label className="block text-sm font-semibold text-gray-200 mb-3">
+                Code Snippet
+              </label>
+              <textarea
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value)}
+                placeholder="Paste your code here..."
+                className="w-full h-64 bg-slate-800 text-gray-100 border border-slate-600 rounded-lg p-4 font-mono text-sm focus:outline-none focus:border-blue-500 resize-none"
+              />
+              <button
+                onClick={handleAnalyze}
+                disabled={loading}
+                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition"
+              >
+                {loading ? <RefreshCw className="animate-spin" size={20} /> : <Send size={20} />}
+                {loading ? 'Analyzing...' : 'Analyze Code'}
+              </button>
+            </div>
 
-              <div className="space-y-4">
-                {/* Toggle Input Type */}
-                <div className="flex gap-3 mb-6">
-                  <button
-                    onClick={() => setInputType('url')}
-                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-                      inputType === 'url'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    <Search className="w-4 h-4 inline mr-2" />
-                    URL
-                  </button>
-                  <button
-                    onClick={() => setInputType('code')}
-                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-                      inputType === 'code'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    <Code className="w-4 h-4 inline mr-2" />
-                    Direct
-                  </button>
+            {/* Results Section */}
+            {selectedAnalysis && (
+              <div className="bg-slate-700 rounded-lg p-6 space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-white mb-4">Risk Scores</h2>
+                  <ScoreDisplay before={selectedAnalysis.before_score} after={selectedAnalysis.after_score} />
                 </div>
 
-                {/* Input Field */}
-                {inputType === 'url' ? (
-                  <input
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://github.com/user/repo/pull/123"
-                    className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-purple-500 focus:outline-none"
-                  />
-                ) : (
-                  <textarea
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="Paste your code here..."
-                    rows="12"
-                    className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-purple-500 focus:outline-none font-mono text-sm"
-                  />
-                )}
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-300 mb-2">Fixed Code</h3>
+                    <pre className="bg-slate-800 p-3 rounded text-xs text-gray-100 overflow-auto max-h-40 font-mono">
+                      {selectedAnalysis.fixed_code}
+                    </pre>
+                  </div>
+                </div>
 
-                {/* Submit Button */}
                 <button
-                  onClick={handleSubmit}
-                  disabled={loading || (!url && !code)}
-                  className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  onClick={() => downloadResult(selectedAnalysis)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition"
                 >
-                  {loading ? 'Analyzing...' : 'Analyze Code'}
+                  <Download size={18} /> Download Report
                 </button>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Results Section */}
-          <div className="lg:col-span-2">
-            {!results ? (
-              <div className="bg-slate-800 rounded-lg p-12 border border-purple-500/20 text-center">
-                <Code className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400">Submit code to see analysis results</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Status Card */}
-                <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/20">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-semibold text-white">Analysis Status</h3>
-                    {results.status === 'processing' && (
-                      <Clock className="w-5 h-5 text-yellow-400 animate-spin" />
-                    )}
-                    {results.status === 'completed' && (
-                      <CheckCircle className="w-5 h-5 text-green-400" />
-                    )}
-                    {results.status === 'failed' && (
-                      <AlertCircle className="w-5 h-5 text-red-400" />
-                    )}
-                  </div>
-                  <p className="text-gray-300 capitalize">
-                    Status: <span className="font-semibold text-purple-300">{results.status}</span>
-                  </p>
-                </div>
-
-                {/* Extracted Features */}
-                {results.extracted_data && (
-                  <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/20">
-                    <h3 className="text-lg font-semibold text-white mb-4">Code Features</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm text-gray-400">Languages</p>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {results.extracted_data.languages?.map((lang) => (
-                            <span key={lang} className="px-3 py-1 bg-purple-600 text-white text-sm rounded-full">
-                              {lang}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-400">Lines of Code</p>
-                        <p className="text-white font-semibold">{results.extracted_data.code_length}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-400">Functions Found</p>
-                        <p className="text-white">{results.extracted_data.functions?.length || 0}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-400">Has Tests</p>
-                        <p className="text-white">{results.extracted_data.has_tests ? '✓ Yes' : '✗ No'}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ML Results */}
-                {results.ml_result && (
-                  <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/20">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <Zap className="w-5 h-5 text-yellow-400" />
-                      AI Analysis Results
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-slate-700 p-3 rounded-lg">
-                          <p className="text-xs text-gray-400">Quality Score</p>
-                          <p className="text-2xl font-bold text-purple-400">
-                            {(results.ml_result.quality_score * 100).toFixed(0)}%
-                          </p>
-                        </div>
-                        <div className="bg-slate-700 p-3 rounded-lg">
-                          <p className="text-xs text-gray-400">Maintainability</p>
-                          <p className="text-2xl font-bold text-green-400">
-                            {(results.ml_result.maintainability * 100).toFixed(0)}%
-                          </p>
-                        </div>
-                      </div>
-
-                      {results.ml_result.issues && results.ml_result.issues.length > 0 && (
-                        <div>
-                          <p className="text-sm font-semibold text-red-300 mb-2">Issues Found</p>
-                          <ul className="space-y-1">
-                            {results.ml_result.issues.map((issue, i) => (
-                              <li key={i} className="text-sm text-gray-300 flex gap-2">
-                                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                                {issue}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {results.ml_result.suggestions && results.ml_result.suggestions.length > 0 && (
-                        <div>
-                          <p className="text-sm font-semibold text-blue-300 mb-2">Suggestions</p>
-                          <ul className="space-y-1">
-                            {results.ml_result.suggestions.map((suggestion, i) => (
-                              <li key={i} className="text-sm text-gray-300 flex gap-2">
-                                <CheckCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                                {suggestion}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+            {error && (
+              <div className="bg-red-900 border border-red-700 text-red-100 px-4 py-3 rounded-lg">
+                {error}
               </div>
             )}
+          </div>
+
+          {/* History Sidebar */}
+          <div className="bg-slate-700 rounded-lg p-6 h-fit sticky top-6">
+            <h2 className="text-lg font-bold text-white mb-4">Analysis History</h2>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {analyses.length === 0 ? (
+                <p className="text-gray-400 text-sm">No analyses yet</p>
+              ) : (
+                analyses.map((analysis) => (
+                  <div
+                    key={analysis.id}
+                    onClick={() => setSelectedAnalysis(analysis)}
+                    className={`p-3 rounded-lg cursor-pointer transition ${
+                      selectedAnalysis?.id === analysis.id
+                        ? 'bg-blue-600'
+                        : 'bg-slate-600 hover:bg-slate-500'
+                    }`}
+                  >
+                    <div className="text-sm text-gray-100 truncate font-mono">
+                      {analysis.original_code.substring(0, 20)}...
+                    </div>
+                    <div className="text-xs text-gray-300 mt-1">
+                      {new Date(analysis.created_at).toLocaleDateString()}
+                    </div>
+                    <div className="text-xs text-green-400 font-semibold mt-1">
+                      Score: {analysis.after_score.toFixed(1)}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(analysis.id);
+                      }}
+                      className="mt-2 w-full bg-red-600 hover:bg-red-700 text-white text-xs py-1 rounded flex items-center justify-center gap-1"
+                    >
+                      <Trash2 size={12} /> Delete
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
