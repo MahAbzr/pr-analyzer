@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Download, Trash2, RefreshCw } from 'lucide-react';
+import process from 'process';
 
 export default function CodeAnalyzer() {
   const [codeInput, setCodeInput] = useState('');

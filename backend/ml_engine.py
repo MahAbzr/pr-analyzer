@@ -15,7 +15,6 @@ LGBM_MODEL_PATH = MODELS / "lightgbm_risk_regressor.txt"
 
 class MLEngine:
     def __init__(self):
-        self.device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         self.codebert_id = 'microsoft/codebert-base'
 
     def load_models(self):
