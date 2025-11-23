@@ -10,7 +10,7 @@ export default function CodeAnalyzer() {
 
   // Get API URL from environment variables
   // const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:8000/api';
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL);
+  const API_URL = import.meta.env.VITE_API_URL;
 
   // Fetch all analyses on mount
   useEffect(() => {
