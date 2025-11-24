@@ -43,14 +43,16 @@ describe('CodeAnalyzer', () => {
       expect(screen.getByPlaceholderText(/Paste your code/i)).toBeInTheDocument();
     });
 
-    // Mock the analyze API call (second fetch call)
+    // Mock the analyze API call (second fetch call) with all required fields
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         id: 'test-123',
-        risk_score_before: 0.5,
-        risk_score_after: 0.2,
-        fixed_code: 'def test():\n    pass'
+        original_code: 'def test(): pass',
+        fixed_code: 'def test():\n    pass',
+        before_score: 50,
+        after_score: 20,
+        created_at: new Date().toISOString()
       })
     });
 
