@@ -48,10 +48,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        REACT_APP_API_URL: ${REACT_APP_API_URL}
+        VITE_API_URL: ${REACT_APP_API_URL}  # Reads from .env file
     container_name: code-analyzer-frontend
-    environment:
-      REACT_APP_API_URL: ${REACT_APP_API_URL}
     ports:
       - "3000:3000"
     volumes:

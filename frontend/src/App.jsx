@@ -9,7 +9,8 @@ export default function CodeAnalyzer() {
   const [error, setError] = useState('');
 
   // Get API URL from environment variables
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:8000/api';
+  // const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:8000/api';
+  const API_URL = import.meta.env.VITE_API_URL;
 
   // Fetch all analyses on mount
   useEffect(() => {
@@ -18,7 +19,7 @@ export default function CodeAnalyzer() {
 
   const fetchAnalyses = async () => {
     try {
-      const res = await fetch(`${API_URL}/analyses?limit=50`);
+      const res = await fetch(`${API_URL}/api/analyses?limit=50`);
       if (!res.ok) throw new Error('Failed to fetch analyses');
       const data = await res.json();
       setAnalyses(data);
@@ -38,7 +39,7 @@ export default function CodeAnalyzer() {
     setError('');
 
     try {
-      const res = await fetch(`${API_URL}/analyze`, {
+      const res = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code_snippet: codeInput })
@@ -62,7 +63,7 @@ export default function CodeAnalyzer() {
     if (!window.confirm('Delete this analysis?')) return;
 
     try {
-      const res = await fetch(`${API_URL}/analysis/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/api/analysis/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
 
       setAnalyses(analyses.filter(a => a.id !== id));
