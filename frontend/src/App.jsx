@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Send, Download, Trash2, RefreshCw } from 'lucide-react';
 
 export default function CodeAnalyzer() {
@@ -7,6 +7,16 @@ export default function CodeAnalyzer() {
   const [selectedAnalysis, setSelectedAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const textareaRef = useRef(null);
+  const lineNumbersRef = useRef(null);
+
+  // Sync line numbers scroll with textarea scroll
+  const handleScroll = () => {
+    if (textareaRef.current && lineNumbersRef.current) {
+      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  };
 
   // Get API URL from environment variables
   // const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:8000/api';
@@ -141,21 +151,48 @@ ${analysis.hints}
               <label className="block text-sm font-semibold text-gray-200 mb-3">
                 Code Snippet
               </label>
-              <div className="flex gap-2 bg-slate-800 border border-slate-600 rounded-lg overflow-hidden">
-                {/* Line numbers */}
-                <div className="bg-slate-900 text-gray-500 text-right py-4 px-3 font-mono text-sm select-none overflow-y-auto h-64">
-                  {codeInput.split('\n').map((_, i) => (
-                    <div key={i} className="leading-6">
+              <div className="flex bg-slate-800 border border-slate-600 rounded-lg overflow-hidden h-64">
+                {/* Line numbers - synced with textarea scroll */}
+                <div
+                  ref={lineNumbersRef}
+                  className="bg-slate-900 text-gray-500 text-right font-mono text-sm select-none overflow-y-auto"
+                  style={{
+                    minWidth: '3.5rem',
+                    paddingTop: '1rem',
+                    paddingBottom: '1rem',
+                    paddingLeft: '0.5rem',
+                    paddingRight: '0.75rem',
+                    lineHeight: '1.5rem',
+                    scrollbarWidth: 'none', /* Firefox */
+                    msOverflowStyle: 'none'  /* IE and Edge */
+                  }}
+                >
+                  <style>{`
+                    div::-webkit-scrollbar {
+                      display: none; /* Chrome, Safari, Opera */
+                    }
+                  `}</style>
+                  {(codeInput || ' ').split('\n').map((_, i) => (
+                    <div key={i} style={{ height: '1.5rem' }}>
                       {i + 1}
                     </div>
                   ))}
                 </div>
                 {/* Code textarea */}
                 <textarea
+                  ref={textareaRef}
                   value={codeInput}
                   onChange={(e) => setCodeInput(e.target.value)}
+                  onScroll={handleScroll}
                   placeholder="Paste your code here..."
-                  className="flex-1 h-64 bg-slate-800 text-gray-100 p-4 font-mono text-sm focus:outline-none resize-none leading-6"
+                  className="flex-1 bg-slate-800 text-gray-100 font-mono text-sm focus:outline-none resize-none overflow-y-auto"
+                  style={{
+                    paddingTop: '1rem',
+                    paddingBottom: '1rem',
+                    paddingLeft: '0.5rem',
+                    paddingRight: '1rem',
+                    lineHeight: '1.5rem'
+                  }}
                 />
               </div>
               <div className="mt-4 flex gap-3">
