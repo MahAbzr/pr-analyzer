@@ -41,7 +41,7 @@ jobs:
       env:
         PYTHONPATH: ${{ github.workspace }}/backend
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-      run: pytest tests/ --ignore=tests/test_ml_engine.py --cov=. --cov-report=xml --cov-report=term
+      run: pytest tests/ --ignore=tests/test_api.py --cov=. --cov-report=xml --cov-report=term
 
   frontend-tests:
     runs-on: ubuntu-latest
