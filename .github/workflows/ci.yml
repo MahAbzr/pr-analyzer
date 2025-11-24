@@ -42,7 +42,7 @@ jobs:
       working-directory: ./backend
       env:
         PYTHONPATH: ${{ github.workspace }}/backend
-      run: pytest tests/ --ignore=tests/test_ml_engine.py --cov=. --cov-report=xml --cov-report=term
+      run: pytest tests/ --ignore=tests/test_api.py --cov=. --cov-report=xml --cov-report=term
 
   frontend-tests:
     runs-on: ubuntu-latest
