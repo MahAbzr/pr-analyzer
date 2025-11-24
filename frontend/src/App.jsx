@@ -50,7 +50,6 @@ export default function CodeAnalyzer() {
       const result = await res.json();
       setSelectedAnalysis(result);
       setAnalyses([result, ...analyses]);
-      setCodeInput('');
     } catch (err) {
       setError('Failed to analyze code');
       console.error(err);
@@ -142,20 +141,41 @@ ${analysis.hints}
               <label className="block text-sm font-semibold text-gray-200 mb-3">
                 Code Snippet
               </label>
-              <textarea
-                value={codeInput}
-                onChange={(e) => setCodeInput(e.target.value)}
-                placeholder="Paste your code here..."
-                className="w-full h-64 bg-slate-800 text-gray-100 border border-slate-600 rounded-lg p-4 font-mono text-sm focus:outline-none focus:border-blue-500 resize-none"
-              />
-              <button
-                onClick={handleAnalyze}
-                disabled={loading}
-                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition"
-              >
-                {loading ? <RefreshCw className="animate-spin" size={20} /> : <Send size={20} />}
-                {loading ? 'Analyzing...' : 'Analyze Code'}
-              </button>
+              <div className="flex gap-2 bg-slate-800 border border-slate-600 rounded-lg overflow-hidden">
+                {/* Line numbers */}
+                <div className="bg-slate-900 text-gray-500 text-right py-4 px-3 font-mono text-sm select-none overflow-y-auto h-64">
+                  {codeInput.split('\n').map((_, i) => (
+                    <div key={i} className="leading-6">
+                      {i + 1}
+                    </div>
+                  ))}
+                </div>
+                {/* Code textarea */}
+                <textarea
+                  value={codeInput}
+                  onChange={(e) => setCodeInput(e.target.value)}
+                  placeholder="Paste your code here..."
+                  className="flex-1 h-64 bg-slate-800 text-gray-100 p-4 font-mono text-sm focus:outline-none resize-none leading-6"
+                />
+              </div>
+              <div className="mt-4 flex gap-3">
+                <button
+                  onClick={handleAnalyze}
+                  disabled={loading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition"
+                >
+                  {loading ? <RefreshCw className="animate-spin" size={20} /> : <Send size={20} />}
+                  {loading ? 'Analyzing...' : 'Analyze Code'}
+                </button>
+                <button
+                  onClick={() => setCodeInput('')}
+                  disabled={loading}
+                  className="px-6 bg-slate-600 hover:bg-slate-500 disabled:bg-slate-800 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition"
+                >
+                  <Trash2 size={18} />
+                  Clear
+                </button>
+              </div>
             </div>
 
             {/* Results Section */}
