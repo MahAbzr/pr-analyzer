@@ -40,6 +40,8 @@ jobs:
 
     - name: Run backend tests
       working-directory: ./backend
+      env:
+        PYTHONPATH: ${{ github.workspace }}/backend
       run: pytest tests/ --ignore=tests/test_ml_engine.py --cov=. --cov-report=xml --cov-report=term
 
   frontend-tests:
@@ -64,7 +66,7 @@ jobs:
 
     - name: Run frontend tests
       working-directory: ./frontend
-      run: npm test -- --coverage --watchAll=false
+      run: npm test -- --coverage
 
     - name: Build frontend
       working-directory: ./frontend
