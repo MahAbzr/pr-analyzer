@@ -49,9 +49,9 @@ describe('CodeAnalyzer', () => {
       json: async () => ({
         id: 'test-123',
         original_code: 'def test(): pass',
-        fixed_code: 'def test():\n    pass',
-        before_score: 50,
-        after_score: 20,
+        security_score: 3.5,
+        potential_issues: 'No major security issues detected',
+        hints: 'Consider adding input validation',
         created_at: new Date().toISOString()
       })
     });

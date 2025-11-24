@@ -28,9 +28,9 @@ class CodeAnalysis(Base):
 
     id = Column(String, primary_key=True, index=True)
     original_code = Column(String)
-    fixed_code = Column(String)
-    before_score = Column(Float)
-    after_score = Column(Float)
+    security_score = Column(Float)
+    potential_issues = Column(String)
+    hints = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -45,9 +45,9 @@ class AnalyzeRequest(BaseModel):
 class AnalysisResult(BaseModel):
     id: str
     original_code: str
-    fixed_code: str
-    before_score: float
-    after_score: float
+    security_score: float
+    potential_issues: str
+    hints: str
     created_at: datetime
 
     class Config:
@@ -79,22 +79,19 @@ def analyze_code(request: AnalyzeRequest):
     """Analyze code snippet using ML Engine and save results"""
     db = SessionLocal()
     try:
+        # Get security analysis from ML Engine
+        security_score, potential_issues, hints = MLEngine.analyze_security(request.code_snippet)
 
-        before_score, after_score, fixed_code = MLEngine.analyze_security(request.code_snippet)
         # Generate unique ID
         analysis_id = str(uuid.uuid4())
-
-        if before_score < after_score:
-            fixed_code = request.code_snippet  # No improvement, keep original
-            after_score = before_score
 
         # Save to database
         analysis = CodeAnalysis(
             id=analysis_id,
             original_code=request.code_snippet,
-            fixed_code=fixed_code,
-            before_score=before_score,
-            after_score=after_score
+            security_score=security_score,
+            potential_issues=potential_issues,
+            hints=hints
         )
         db.add(analysis)
         db.commit()

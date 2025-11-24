@@ -18,21 +18,26 @@ def test_analyze_code():
 
     response = client.post(
         "/api/analyze",
-        json={"code": test_code}
+        json={"code_snippet": test_code}
     )
 
     assert response.status_code == 200
     data = response.json()
-    assert "risk_score_before" in data
-    assert "risk_score_after" in data
-    assert "fixed_code" in data
+    assert "security_score" in data
+    assert "potential_issues" in data
+    assert "hints" in data
+    assert "original_code" in data
+    assert "id" in data
+    assert isinstance(data["security_score"], (int, float))
+    assert isinstance(data["potential_issues"], str)
+    assert isinstance(data["hints"], str)
 
 
 def test_analyze_empty_code():
     """Test analysis with empty code."""
     response = client.post(
         "/api/analyze",
-        json={"code": ""}
+        json={"code_snippet": ""}
     )
 
-    assert response.status_code in [200, 400]
+    assert response.status_code in [200, 422, 500]

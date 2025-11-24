@@ -72,58 +72,95 @@ class MLEngine:
         return model.generate_content(prompt).text
 
     @staticmethod
-    def extract_fixed(raw: str) -> str:
-        pattern = r"```(?:[a-zA-Z0-9_+-]+)?\n(.*?)```"
-        match = re.search(pattern, raw, re.DOTALL)
-        if match:
-            return match.group(1).strip()
+    def extract_issues_and_hints(raw: str) -> tuple[str, str]:
+        """
+        Extract potential issues and hints from LLM response.
+        Expected format:
+        POTENTIAL ISSUES:
+        - issue 1
+        - issue 2
 
-        return raw.strip()
+        HINTS:
+        - hint 1
+        - hint 2
+        """
+        issues = ""
+        hints = ""
+
+        # Try to extract structured sections
+        issues_match = re.search(r"POTENTIAL\s+ISSUES?:?\s*\n(.*?)(?=\n\s*HINTS?:|\Z)", raw, re.DOTALL | re.IGNORECASE)
+        hints_match = re.search(r"HINTS?:?\s*\n(.*?)(?=\n\s*POTENTIAL|\Z)", raw, re.DOTALL | re.IGNORECASE)
+
+        if issues_match:
+            issues = issues_match.group(1).strip()
+        if hints_match:
+            hints = hints_match.group(1).strip()
+
+        # If structured format not found, try to split the response
+        if not issues and not hints:
+            parts = raw.split('\n\n', 1)
+            if len(parts) == 2:
+                issues = parts[0].strip()
+                hints = parts[1].strip()
+            else:
+                # All content goes to issues
+                issues = raw.strip()
+                hints = "No specific hints provided."
+
+        return issues, hints
 
     @staticmethod
     def build_prompt(code: str, pred_risk: float) -> str:
         """
-        Build repair prompt including the LightGBM risk score.
+        Build analysis prompt to identify potential security issues and provide hints.
+        Requests max 5 short, accurate bullet points for each section.
         """
         lines = [
-            "You are a secure code assistant.",
-            f"Predicted security risk score (0–10): {pred_risk:.3f}",
+            "You are a security code analysis assistant.",
+            f"The code has a predicted security risk score of {pred_risk:.2f} out of 10.",
             "",
-            "Find the security risk(s) if they exist and provide a fixed version of the code.",
-            "Provide ONLY the fixed code wrapped in triple backticks (```) with the language identifier.",
-            "Do not include any explanations, comments, or text outside the code block.",
-            "If there are no security issues, return the original code in the same format.",
+            "Analyze the following code for security vulnerabilities and provide your response in this EXACT format:",
             "",
-            "Original code:",
+            "POTENTIAL ISSUES:",
+            "- List the TOP 5 (or fewer) most critical security issues found",
+            "- MUST include the line number(s) where each issue occurs (e.g., 'Line 3: SQL injection risk')",
+            "- Each bullet point must be ONE short, clear sentence (max 15 words)",
+            "- Be specific and accurate about the vulnerability",
+            "- ONLY mention issues that actually exist in the code - DO NOT hallucinate or make up issues",
+            "- If no issues found, write: 'No security issues detected'",
+            "",
+            "HINTS:",
+            "- Provide the TOP 5 (or fewer) most important best practice recommendations",
+            "- Each bullet point must be ONE short, actionable sentence (max 15 words)",
+            "- Focus on concrete fixes, not general advice",
+            "- Be direct and practical",
+            "",
+            "IMPORTANT: ",
+            "- Use bullet points (-) only. Keep each point concise and under 15 words.",
+            "- Always include line numbers for POTENTIAL ISSUES.",
+            "- Only report real issues found in the actual code provided.",
+            "",
+            "Code to analyze:",
             code,
-            "",
-            "Fixed code (wrapped in ``` with language identifier):",
         ]
         return "\n".join(lines)
 
-    def analyze_security(self, code) -> tuple[float, float, str]:
+    def analyze_security(self, code: str) -> tuple[float, str, str]:
         """
-        Given code, get LLM suggestion and calculate risk scores before and after.
-        Returns (pred_before, pred_after, fixed_code).
+        Analyze code for security issues.
+        Returns (security_score, potential_issues, hints).
         """
-
         # load models
         self.load_models()
 
-        emb_before = self.embed_code(code.strip())
-        pred_before = float(self.lgbm_model.predict(emb_before)[0])
+        emb = self.embed_code(code.strip())
+        security_score = float(self.lgbm_model.predict(emb)[0])
 
-        prompt = self.build_prompt(code.strip(), pred_before)
+        prompt = self.build_prompt(code.strip(), security_score)
         llm_output = self.call_llm(prompt)
-        fixed_code = self.extract_fixed(llm_output)
+        potential_issues, hints = self.extract_issues_and_hints(llm_output)
 
-        if fixed_code:
-            emb_after = self.embed_code(fixed_code)
-            pred_after = float(self.lgbm_model.predict(emb_after)[0])
-        else:
-            pred_after = pred_before  # no change
-
-        return pred_before, pred_after, fixed_code
+        return security_score, potential_issues, hints
 
 
 if __name__ == "__main__":
@@ -132,13 +169,8 @@ def insecure_function(user_input):
     query = "SELECT * FROM users WHERE name = '" + user_input + "';"
     cursor.execute(query)
     '''
-#     sample_code = '''
-# def insecure_function(user_input):
-#     query = "SELECT * FROM users WHERE name = ?;"
-#     cursor.execute(query, (user_input,))
-#     '''
     ml_engine = MLEngine()
-    pred_b, pred_a, fixed = ml_engine.analyze_security(sample_code)
-    print(f"Risk before: {pred_b:.3f}")
-    print(f"Risk after: {pred_a:.3f}")
-    print(f"\nFixed code:\n{fixed}")
+    score, issues, hints = ml_engine.analyze_security(sample_code)
+    print(f"Security Score: {score:.3f}/10")
+    print(f"\nPotential Issues:\n{issues}")
+    print(f"\nHints:\n{hints}")
