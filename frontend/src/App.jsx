@@ -82,13 +82,13 @@ ID: ${analysis.id}
 ORIGINAL CODE:
 ${analysis.original_code}
 
-FIXED CODE:
-${analysis.fixed_code}
+SECURITY SCORE: ${analysis.security_score.toFixed(2)}/10
 
-Risk SCORES:
-Before: ${analysis.before_score}/100
-After: ${analysis.after_score}/100
-Improvement: ${(analysis.before_score - analysis.after_score).toFixed(2)} points
+POTENTIAL ISSUES:
+${analysis.potential_issues}
+
+HINTS & BEST PRACTICES:
+${analysis.hints}
 `;
 
     const blob = new Blob([content], { type: 'text/plain' });
@@ -100,26 +100,29 @@ Improvement: ${(analysis.before_score - analysis.after_score).toFixed(2)} points
     window.URL.revokeObjectURL(url);
   };
 
-  const ScoreDisplay = ({ before, after }) => {
-    const improvement = before.toFixed(1) - after.toFixed(1);
+  const ScoreDisplay = ({ score }) => {
+    const getScoreColor = (score) => {
+      if (score < 2) return 'text-green-500';
+      if (score < 6) return 'text-yellow-500';
+      return 'text-red-500';
+    };
+
+    const getScoreLabel = (score) => {
+      if (score < 2.5) return 'Low Risk';
+      if (score < 6) return 'Medium Risk';
+      return 'High Risk';
+    };
+
     return (
-      <div className="flex gap-6">
+      <div className="flex items-center justify-center gap-4">
         <div className="text-center">
-          <div className="text-sm text-gray-600 mb-2">Before</div>
-          <div className="text-3xl font-bold text-red-500">{before.toFixed(1)}</div>
-          <div className="text-xs text-gray-500">Risk Score</div>
-        </div>
-        <div className="flex items-center justify-center">
-          <div className="text-2xl text-gray-400">→</div>
-        </div>
-        <div className="text-center">
-          <div className="text-sm text-gray-600 mb-2">After</div>
-          <div className="text-3xl font-bold text-green-500">{after.toFixed(1)}</div>
-          <div className="text-xs text-gray-500">Risk Score</div>
-        </div>
-        <div className="flex items-center justify-center">
-          <div className={`text-lg font-bold ${improvement >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {improvement >= 0 ? '+' : ''} {improvement.toFixed(1)}
+          <div className="text-sm text-gray-400 mb-2">Security Risk Score</div>
+          <div className={`text-5xl font-bold ${getScoreColor(score)}`}>
+            {score.toFixed(1)}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">out of 10</div>
+          <div className={`text-sm font-semibold mt-2 ${getScoreColor(score)}`}>
+            {getScoreLabel(score)}
           </div>
         </div>
       </div>
@@ -159,16 +162,27 @@ Improvement: ${(analysis.before_score - analysis.after_score).toFixed(2)} points
             {selectedAnalysis && (
               <div className="bg-slate-700 rounded-lg p-6 space-y-6">
                 <div>
-                  <h2 className="text-xl font-bold text-white mb-4">Risk Scores</h2>
-                  <ScoreDisplay before={selectedAnalysis.before_score} after={selectedAnalysis.after_score} />
+                  <h2 className="text-xl font-bold text-white mb-4">Security Analysis</h2>
+                  <ScoreDisplay score={selectedAnalysis.security_score} />
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2">Fixed Code</h3>
-                    <pre className="bg-slate-800 p-3 rounded text-xs text-gray-100 overflow-auto max-h-40 font-mono">
-                      {selectedAnalysis.fixed_code}
-                    </pre>
+                    <h3 className="text-sm font-semibold text-red-300 mb-2 flex items-center gap-2">
+                      <span className="text-red-400">⚠️</span> Potential Security Issues
+                    </h3>
+                    <div className="bg-slate-800 p-4 rounded text-sm text-gray-100 overflow-auto max-h-48 whitespace-pre-wrap">
+                      {selectedAnalysis.potential_issues}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-2">
+                      <span className="text-blue-400">💡</span> Hints & Best Practices
+                    </h3>
+                    <div className="bg-slate-800 p-4 rounded text-sm text-gray-100 overflow-auto max-h-48 whitespace-pre-wrap">
+                      {selectedAnalysis.hints}
+                    </div>
                   </div>
                 </div>
 
@@ -211,8 +225,8 @@ Improvement: ${(analysis.before_score - analysis.after_score).toFixed(2)} points
                     <div className="text-xs text-gray-300 mt-1">
                       {new Date(analysis.created_at).toLocaleDateString()}
                     </div>
-                    <div className="text-xs text-green-400 font-semibold mt-1">
-                      Score: {analysis.after_score.toFixed(1)}
+                    <div className="text-xs text-yellow-400 font-semibold mt-1">
+                      Risk: {analysis.security_score.toFixed(1)}/10
                     </div>
                     <button
                       onClick={(e) => {
