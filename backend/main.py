@@ -85,6 +85,11 @@ def analyze_code(request: AnalyzeRequest):
         # Generate unique ID
         analysis_id = str(uuid.uuid4())
 
+        if security_score < 0:
+            security_score = 0
+        elif security_score > 10:
+            security_score = 10
+
         # Save to database
         analysis = CodeAnalysis(
             id=analysis_id,
