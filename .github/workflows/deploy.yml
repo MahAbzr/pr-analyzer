@@ -5,8 +5,76 @@ on:
     branches: [ main ]
 
 jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-cov flake8 black
+
+    - name: Lint with flake8
+      working-directory: ./backend
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Run backend tests
+      working-directory: ./backend
+      env:
+        PYTHONPATH: ${{ github.workspace }}/backend
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      run: pytest tests/ --ignore=tests/test_ml_engine.py --cov=. --cov-report=xml --cov-report=term
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm install
+
+    - name: Lint frontend code
+      working-directory: ./frontend
+      run: npm run lint
+
+    - name: Run frontend tests
+      working-directory: ./frontend
+      env:
+        VITE_API_URL: ${{ secrets.VITE_API_URL || 'http://localhost:8000' }}
+      run: npm test -- --coverage
+
+    - name: Build frontend
+      working-directory: ./frontend
+      run: npm run build
+
   deploy:
     runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
 
     steps:
       - name: Checkout code
