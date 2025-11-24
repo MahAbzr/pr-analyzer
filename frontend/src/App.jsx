@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Send, Download, Trash2, RefreshCw } from 'lucide-react';
 
 export default function CodeAnalyzer() {

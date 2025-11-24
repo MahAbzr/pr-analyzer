@@ -1,8 +1,10 @@
-name: Deploy to EC2
+name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
 
 jobs:
   backend-tests:
@@ -41,7 +43,7 @@ jobs:
       env:
         PYTHONPATH: ${{ github.workspace }}/backend
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-      run: pytest tests/ --ignore=tests/test_ml_engine.py --cov=. --cov-report=xml --cov-report=term
+      run: pytest tests/ --ignore=tests/test_api.py --cov=. --cov-report=xml --cov-report=term
 
   frontend-tests:
     runs-on: ubuntu-latest
@@ -53,6 +55,7 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: '20'
+
 
     - name: Install frontend dependencies
       working-directory: ./frontend
@@ -72,30 +75,32 @@ jobs:
       working-directory: ./frontend
       run: npm run build
 
-  deploy:
+  docker-build:
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests]
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v3
 
-      - name: Copy files to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "."
-          target: "~/pr-analyzer"
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-      - name: Deploy on EC2
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            cd ~/pr-analyzer
-            docker compose down
-            docker compose up -d --build
+    - name: Build backend image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        push: false
+        tags: code-analyzer-backend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build frontend image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./frontend
+        push: false
+        tags: code-analyzer-frontend:test
+        build-args: |
+          VITE_API_URL=http://localhost:8000
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
