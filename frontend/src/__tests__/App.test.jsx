@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CodeAnalyzer from '../App';
 
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 describe('CodeAnalyzer', () => {
   beforeEach(() => {
