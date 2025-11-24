@@ -1,7 +1,6 @@
 import pytest
 from ml_engine import extract_features, calculate_score_and_get_fixed_code
 
-
 def test_extract_features_basic():
     """Test feature extraction with simple code."""
     code = "def foo():\n    x = 1\n    return x"

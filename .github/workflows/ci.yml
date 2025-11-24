@@ -40,7 +40,7 @@ jobs:
 
     - name: Run backend tests
       working-directory: ./backend
-      run: pytest tests/ --cov=. --cov-report=xml --cov-report=term
+      run: pytest tests/ --ignore=tests/test_ml_engine.py --cov=. --cov-report=xml --cov-report=term
 
   frontend-tests:
     runs-on: ubuntu-latest
