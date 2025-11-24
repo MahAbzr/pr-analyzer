@@ -25,24 +25,88 @@ class MLEngine:
         self.codebert_tokenizer = AutoTokenizer.from_pretrained(self.codebert_id)
         self.codebert_model = AutoModel.from_pretrained(self.codebert_id)  # CPU
 
-    def embed_code(self, code: str) -> np.ndarray:
+    def chunk_text(self, text: str, chunk_size: int = 400, overlap: int = 80):
         """
-        Compute CodeBERT [CLS] embedding for a code snippet.
-        Runs on CPU to avoid GPU memory pressure.
+        Convert text → token IDs → sliding-window chunks.
+        Returns list of token ID lists.
+        Handles long sequences by tokenizing without triggering length warnings.
         """
-        inputs = self.codebert_tokenizer(
-            code,
-            return_tensors="pt",
-            truncation=True,
-            max_length=512,
+        # Tokenize with truncation disabled and max_length set high to avoid warnings
+        tokens = self.codebert_tokenizer.encode(
+            text,
+            add_special_tokens=False,
+            return_tensors=None
         )
-        with torch.no_grad():
-            outputs = self.codebert_model(**inputs)
-            cls_vec = outputs.last_hidden_state[:, 0, :]
-        return cls_vec.numpy().reshape(1, -1)
+
+        chunks = []
+        i = 0
+
+        while i < len(tokens):
+            chunk = tokens[i:i + chunk_size]
+            chunks.append(chunk)
+            i += (chunk_size - overlap)
+
+        return chunks
 
     @staticmethod
-    def call_llm(prompt: str, max_new: int = 8192) -> str:
+    def mean_pool(last_hidden_state, attention_mask):
+        """
+        Mean pooling over token embeddings using attention mask.
+        """
+        mask = attention_mask.unsqueeze(-1)  # [B,L,1]
+        masked = last_hidden_state * mask
+        summed = masked.sum(dim=1)
+        denom = mask.sum(dim=1).clamp(min=1e-9)
+        return summed / denom
+
+    def embed_code(self, code: str) -> np.ndarray:
+        """
+        Compute CodeBERT embedding for a code snippet with chunking support.
+        Handles long code by splitting into chunks and averaging embeddings.
+        Runs on CPU to avoid GPU memory pressure.
+        """
+        CHUNK_LEN = 400
+        OVERLAP = 80
+        MAX_LEN = 512  # CodeBERT max length (actual limit)
+
+        # Split code into chunks
+        token_chunks = self.chunk_text(code, CHUNK_LEN, OVERLAP)
+
+        if len(token_chunks) == 0:
+            # Empty code - return zero vector
+            return np.zeros((1, 768), dtype=np.float32)
+
+        chunk_vecs = []
+
+        with torch.no_grad():
+            for tokens in token_chunks:
+                # Ensure chunk doesn't exceed max length
+                if len(tokens) > MAX_LEN:
+                    tokens = tokens[:MAX_LEN]
+
+                # Create attention mask (1 for real tokens)
+                attention_mask = [1] * len(tokens)
+
+                # Convert to tensors
+                input_ids = torch.tensor([tokens], dtype=torch.long)
+                attention_mask_tensor = torch.tensor([attention_mask], dtype=torch.long)
+
+                # Get embeddings
+                outputs = self.codebert_model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask_tensor
+                )
+
+                # Mean pooling instead of just CLS token
+                pooled = self.mean_pool(outputs.last_hidden_state, attention_mask_tensor)
+                chunk_vecs.append(pooled.cpu().numpy())
+
+        # Average over all chunks
+        file_vec = np.mean(np.vstack(chunk_vecs), axis=0, dtype=np.float32)
+        return file_vec.reshape(1, -1)
+
+    @staticmethod
+    def call_llm(prompt: str, max_new: int = 8192 * 2) -> str:
         """
         Call Mistral via HuggingFace Inference API using conversational task.
         Requires HUGGINGFACE_API_KEY environment variable.
